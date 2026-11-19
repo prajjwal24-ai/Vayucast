@@ -1,0 +1,58 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python -m vayucast.ingest
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: aa4431a6965ae959015310a2f63dd204
+      size: 1151
+    - path: src/vayucast/ingest.py
+      hash: md5
+      md5: dc684ecbffd780d4db9025b1d0c1d98e
+      size: 11345
+    outs:
+    - path: data/processed/latest_features.json
+      hash: md5
+      md5: faa2d8e82a02add664f8bd844da882e7
+      size: 5470
+    - path: data/raw/delhi_daily.parquet
+      hash: md5
+      md5: 6e27351303798cca2b1d1b3db1e18cd2
+      size: 72891
+  train:
+    cmd: python -m vayucast.train --fail-on-gate
+    deps:
+    - path: configs/config.yaml
+      hash: md5
+      md5: aa4431a6965ae959015310a2f63dd204
+      size: 1151
+    - path: data/raw/delhi_daily.parquet
+      hash: md5
+      md5: 6e27351303798cca2b1d1b3db1e18cd2
+      size: 72891
+    - path: src/vayucast/features.py
+      hash: md5
+      md5: e82ae5ee9789b63b925faae6c3a28b53
+      size: 6081
+    - path: src/vayucast/gate.py
+      hash: md5
+      md5: 5a8e27cd9bace4f16b76aeab4dd9318d
+      size: 2966
+    - path: src/vayucast/train.py
+      hash: md5
+      md5: 7bf7b0e90e69741ca2fe137f45b0209e
+      size: 8256
+    outs:
+    - path: artifacts/metadata.json
+      hash: md5
+      md5: 5569961406b79b90fccfa8b6d9706923
+      size: 1774
+    - path: artifacts/model_bundle.joblib
+      hash: md5
+      md5: 24ad643e4d80c7b86144ef757c7ab023
+      size: 2479391
+    - path: artifacts/reference.parquet
+      hash: md5
+      md5: c12e5851b157576c21a15c58a0b9edc3
+      size: 28621

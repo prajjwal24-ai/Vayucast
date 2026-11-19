@@ -1,0 +1,50 @@
+city:
+  name: "Delhi"
+  latitude: 28.6139
+  longitude: 77.2090
+  timezone: "Asia/Kolkata"
+
+api:
+  air_quality_url: "https://air-quality-api.open-meteo.com/v1/air-quality"
+  weather_archive_url: "https://archive-api.open-meteo.com/v1/archive"
+  weather_forecast_url: "https://api.open-meteo.com/v1/forecast"
+  history_start_date: "2022-08-10"
+  timeout_seconds: 30
+
+preprocessing:
+  max_ffill_days: 2
+
+features:
+  lags: [1, 2, 3, 7]
+  rolling_windows: [3, 7]
+  horizons: [1, 2, 3]
+
+training:
+  test_days: 90
+  model_params:
+    n_estimators: 300
+    learning_rate: 0.05
+    num_leaves: 31
+    min_child_samples: 20
+    subsample: 0.8
+    colsample_bytree: 0.8
+    random_state: 42
+    verbose: -1
+
+gate:
+  primary_horizon: 1
+  max_regression_pct: 5.0
+
+drift:
+  reference_days: 180
+  current_days: 30
+  drift_share_threshold: 0.5
+
+paths:
+  raw_data: "data/raw/delhi_daily.parquet"
+  latest_cache: "data/processed/latest_features.json"
+  model_bundle: "artifacts/model_bundle.joblib"
+  metadata: "artifacts/metadata.json"
+  reference_data: "artifacts/reference.parquet"
+  drift_json: "reports/drift_summary.json"
+  drift_html: "reports/drift_report.html"

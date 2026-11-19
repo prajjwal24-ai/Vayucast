@@ -1,0 +1,87 @@
+name: Daily Data Ingestion & Drift Monitor
+
+on:
+  schedule:
+    # 01:00 UTC = 06:30 IST daily
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  ingest-and-monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[train]"
+
+      - name: Check AWS credentials
+        id: check_aws
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          if [ -n "$AWS_KEY" ] && [ -n "$BUCKET" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.check_aws.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+
+      - name: Pull existing dataset & reference from S3
+        if: steps.check_aws.outputs.ready == 'true'
+        env:
+          BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          aws s3 cp "s3://$BUCKET/data/delhi_daily.parquet" data/raw/delhi_daily.parquet || true
+          aws s3 cp "s3://$BUCKET/production/reference.parquet" artifacts/reference.parquet || true
+
+      - name: Run daily Open-Meteo ingestion
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+        run: python -m vayucast.ingest
+
+      - name: Run Evidently drift check
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+        run: |
+          if [ ! -f artifacts/reference.parquet ]; then
+            python -m vayucast.train --force-promote
+          fi
+          python -m vayucast.drift
+
+      - name: Upload Evidently drift reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-drift-report
+          path: |
+            reports/drift_summary.json
+            reports/drift_report.html
+
+      - name: Refresh fallback cache & drift status on live EC2 API
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          RELOAD_TOKEN: ${{ secrets.VAYUCAST_RELOAD_TOKEN }}
+        run: |
+          if [ -n "$EC2_HOST" ]; then
+            curl -fsS -X POST "http://$EC2_HOST:8000/reload" \
+              -H "X-Reload-Token: $RELOAD_TOKEN"
+          fi

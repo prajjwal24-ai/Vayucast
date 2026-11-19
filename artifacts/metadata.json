@@ -1,0 +1,75 @@
+{
+  "model_version": "v20261119-175454",
+  "mlflow_run_id": "e9c8ef5de034468c991d4cdeb3695f91",
+  "trained_at_utc": "2026-11-19T17:55:04.052729+00:00",
+  "city": "Delhi",
+  "data_rows": 1562,
+  "data_start": "2022-08-10",
+  "data_end": "2026-11-18",
+  "feature_columns": [
+    "pm2_5",
+    "pm10",
+    "nitrogen_dioxide",
+    "ozone",
+    "carbon_monoxide",
+    "temperature_2m_mean",
+    "relative_humidity_2m_mean",
+    "wind_speed_10m_max",
+    "precipitation_sum",
+    "pm2_5_lag_1",
+    "pm2_5_lag_2",
+    "pm2_5_lag_3",
+    "pm2_5_lag_7",
+    "pm2_5_roll_mean_3",
+    "pm2_5_roll_mean_7",
+    "pm2_5_roll_std_7",
+    "target_temp",
+    "target_humidity",
+    "target_wind",
+    "target_precip",
+    "target_month",
+    "target_dow",
+    "target_doy_sin",
+    "target_doy_cos"
+  ],
+  "horizons": [
+    1,
+    2,
+    3
+  ],
+  "metrics": {
+    "h1": {
+      "model_mae": 14.542,
+      "baseline_mae": 16.113,
+      "model_rmse": 20.458,
+      "baseline_rmse": 21.054,
+      "category_accuracy": 0.5667,
+      "baseline_category_accuracy": 0.5444
+    },
+    "h2": {
+      "model_mae": 17.964,
+      "baseline_mae": 23.025,
+      "model_rmse": 24.658,
+      "baseline_rmse": 30.006,
+      "category_accuracy": 0.5,
+      "baseline_category_accuracy": 0.3778
+    },
+    "h3": {
+      "model_mae": 19.789,
+      "baseline_mae": 27.998,
+      "model_rmse": 26.252,
+      "baseline_rmse": 34.762,
+      "category_accuracy": 0.4556,
+      "baseline_category_accuracy": 0.2556
+    }
+  },
+  "gate": {
+    "passed": true,
+    "reason": "Passed baseline gate (-9.75% vs persistence) (initial bootstrap promotion).",
+    "challenger_mae": 14.542,
+    "baseline_mae": 16.113,
+    "champion_mae": null,
+    "improvement_over_baseline_pct": 9.75,
+    "delta_vs_champion_pct": null
+  }
+}

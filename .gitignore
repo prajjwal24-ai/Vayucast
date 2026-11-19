@@ -1,0 +1,25 @@
+# Python & virtualenvs
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local ML artifacts, data & tracking (managed by DVC / S3)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+artifacts/*
+!artifacts/.gitkeep
+reports/*
+!reports/.gitkeep
+mlruns/
+mlflow.db
+
+# Secrets & OS
+.env
+.DS_Store
+
+!artifacts/metadata.json

@@ -1,0 +1,15 @@
+services:
+  api:
+    build: .
+    container_name: vayucast-api
+    ports:
+      - "8000:8000"
+    environment:
+      - VAYUCAST_CONFIG_PATH=configs/config.yaml
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./data/processed:/app/data/processed:ro
+      - ./reports:/app/reports:ro
+    restart: unless-stopped

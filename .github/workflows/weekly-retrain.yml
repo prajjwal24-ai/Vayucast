@@ -1,0 +1,91 @@
+name: Weekly Retrain & Quality Gate Promotion
+
+on:
+  schedule:
+    # Sundays 02:00 UTC = 07:30 IST
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      force_promote:
+        description: "Promote model even if relative quality gate fails"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  retrain-and-promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[train]"
+
+      - name: Check AWS credentials
+        id: check_aws
+        env:
+          AWS_KEY: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+        run: |
+          if [ -n "$AWS_KEY" ] && [ -n "$BUCKET" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.check_aws.outputs.ready == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+
+      - name: Ingest latest data
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+        run: python -m vayucast.ingest
+
+      - name: Train challengers & evaluate quality gate
+        id: train
+        env:
+          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
+          FORCE_PROMOTE: ${{ github.event.inputs.force_promote || 'false' }}
+        run: |
+          if [ "$FORCE_PROMOTE" = "true" ]; then
+            python -m vayucast.train --force-promote
+          else
+            python -m vayucast.train
+          fi
+          PROMOTED=$(python -c "import json, pathlib; p = pathlib.Path('artifacts/metadata.json'); print('true' if p.exists() and (json.loads(p.read_text()).get('gate', {}).get('passed') or '$FORCE_PROMOTE' == 'true') else 'false')")
+          echo "promoted=$PROMOTED" >> "$GITHUB_OUTPUT"
+
+      - name: Upload training metadata & MLflow DB
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-retrain-artifacts
+          path: |
+            artifacts/metadata.json
+            mlflow.db
+
+      - name: Hot-reload promoted model on EC2
+        if: steps.train.outputs.promoted == 'true'
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          RELOAD_TOKEN: ${{ secrets.VAYUCAST_RELOAD_TOKEN }}
+        run: |
+          if [ -n "$EC2_HOST" ]; then
+            curl -fsS -X POST "http://$EC2_HOST:8000/reload" \
+              -H "X-Reload-Token: $RELOAD_TOKEN"
+          fi

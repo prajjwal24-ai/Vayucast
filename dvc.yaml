@@ -1,0 +1,24 @@
+stages:
+  ingest:
+    cmd: python -m vayucast.ingest
+    deps:
+      - configs/config.yaml
+      - src/vayucast/ingest.py
+    outs:
+      - data/raw/delhi_daily.parquet
+      - data/processed/latest_features.json
+
+  train:
+    cmd: python -m vayucast.train --fail-on-gate
+    deps:
+      - configs/config.yaml
+      - data/raw/delhi_daily.parquet
+      - src/vayucast/features.py
+      - src/vayucast/gate.py
+      - src/vayucast/train.py
+    outs:
+      - artifacts/model_bundle.joblib
+      - artifacts/reference.parquet
+    metrics:
+      - artifacts/metadata.json:
+          cache: false
