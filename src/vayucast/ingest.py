@@ -39,16 +39,17 @@ def _today_in_tz(tz_name: str) -> date:
 
 def _get_json(url: str, params: dict[str, Any], timeout: int, retries: int = 3) -> dict[str, Any]:
     last_err: Exception | None = None
+    req_timeout = httpx.Timeout(timeout, connect=10.0)
     for attempt in range(1, retries + 1):
         try:
-            with httpx.Client(timeout=timeout) as client:
+            with httpx.Client(timeout=req_timeout) as client:
                 resp = client.get(url, params=params)
                 resp.raise_for_status()
                 return resp.json()
         except (httpx.HTTPError, ValueError) as exc:
             last_err = exc
             if attempt < retries:
-                time.sleep(attempt * 1.5)
+                time.sleep(attempt * 2.0)
     raise RuntimeError(f"Request failed after {retries} attempts: {url}") from last_err
 
 
@@ -239,6 +240,40 @@ def _df_to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
     out["date"] = pd.to_datetime(out["date"]).dt.strftime("%Y-%m-%d")
     return json.loads(out.to_json(orient="records"))
 
+def _build_cache_window(cfg: AppConfig, history_df: pd.DataFrame) -> dict[str, Any]:
+    """Build fallback cache from already-ingested history + 1 weather forecast call."""
+    tail_df = history_df.tail(14)
+    anchor_date = pd.to_datetime(tail_df["date"]).max().date()
+    max_horizon = max(cfg.features.horizons)
+
+    forecast_records: list[dict[str, Any]] = []
+    try:
+        params = {
+            "latitude": cfg.city.latitude,
+            "longitude": cfg.city.longitude,
+            "daily": ",".join(WEATHER_DAILY_VARS),
+            "timezone": cfg.city.timezone,
+            "forecast_days": max_horizon + 2,
+        }
+        forecast_df = _parse_daily_weather(
+            _get_json(cfg.api.weather_forecast_url, params, cfg.api.timeout_seconds)
+        )
+        forecast_df = forecast_df[
+            (forecast_df["date"] > pd.Timestamp(anchor_date))
+            & (forecast_df["date"] <= pd.Timestamp(anchor_date + timedelta(days=max_horizon)))
+        ].sort_values("date")
+        forecast_records = _df_to_records(forecast_df)
+    except Exception as exc:
+        logger.warning("Forecast enrichment failed; saving history-only cache: %s", exc)
+
+    return {
+        "city": cfg.city.name,
+        "fetched_at": datetime.now(ZoneInfo(cfg.city.timezone)).isoformat(),
+        "anchor_date": anchor_date.isoformat(),
+        "history": _df_to_records(tail_df),
+        "weather_forecast": forecast_records,
+    }
+
 
 def run_ingest(cfg: AppConfig | None = None, full_refresh: bool = False) -> pd.DataFrame:
     cfg = cfg or load_config()
@@ -282,7 +317,8 @@ def run_ingest(cfg: AppConfig | None = None, full_refresh: bool = False) -> pd.D
     )
 
     # Refresh fallback cache snapshot for demo-day / API-outage resilience
-    live_window = fetch_live_inference_window(cfg)
+    # Build fallback cache from already-ingested history (avoids redundant AQ API call)
+    live_window = _build_cache_window(cfg, final_df)
     cfg.paths.latest_cache.parent.mkdir(parents=True, exist_ok=True)
     cfg.paths.latest_cache.write_text(json.dumps(live_window, indent=2), encoding="utf-8")
     logger.info("Updated fallback cache -> %s", cfg.paths.latest_cache)
