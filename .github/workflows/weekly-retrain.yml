@@ -86,6 +86,6 @@ jobs:
           RELOAD_TOKEN: ${{ secrets.VAYUCAST_RELOAD_TOKEN }}
         run: |
           if [ -n "$EC2_HOST" ]; then
-            curl -fsS -X POST "http://$EC2_HOST:8000/reload" \
+            curl -fsS -X POST "http://$EC2_HOST/reload" \
               -H "X-Reload-Token: $RELOAD_TOKEN"
           fi
